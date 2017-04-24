@@ -8,6 +8,9 @@ import cv2
 import datetime
 import imutils
 import time
+import pickle
+import struct
+import socket
 
 def main():
 	cap = cv2.VideoCapture(0)
@@ -16,6 +19,10 @@ def main():
 	prevFrame = None
 	fps_half = 15
 	count = 0
+
+	clientsocket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	clientsocket.connect(('10.0.1.16',8089))
+
 	while(True):
 		#Capture frames
 		ret, frame = cap.read()
@@ -32,12 +39,16 @@ def main():
 			thresh = cv2.dilate(thresh, None, iterations=10)
 			
 			if count >= fps_half:
+				#Only update prev_frame if half, this effects motion detection sensitivity
+				#The lower the more sensitive it is from moment to moment.
 				prevFrame = gray
 				count = 0
-			cv2.imshow("Threshold", thresh)
+			#cv2.imshow("Threshold", thresh)
 
 
 			(cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+			
+			motion = "false"
 			
 			for c in cnts:
 			 #if the contour is too small, ignore it
@@ -45,8 +56,12 @@ def main():
 					continue
 				(x, y, w, h) = cv2.boundingRect(c)
 				cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-				
-			cv2.imshow("Frame", frame)
+				motion = "_true"
+			#Send to server
+			data = pickle.dumps(frame)
+			clientsocket.sendall(motion+struct.pack("i", len(data))+data)
+			#cv2.imshow("Frame_cli", frame)
+			print motion
 
 		else:
 			prevFrame = gray
