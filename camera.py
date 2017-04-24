@@ -3,6 +3,8 @@
 # Date: 2017-04-22
 # Description: Python based motion detection camera
 
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 import numpy as np
 import cv2
 import datetime
@@ -13,7 +15,11 @@ import struct
 import socket
 
 def main():
-	cap = cv2.VideoCapture(0)
+	# initialize the camera and grab a reference to the raw camera capture
+	camera = PiCamera()
+	camera.resolution = (640, 480)
+	camera.framerate = 32
+	rawCapture = PiRGBArray(camera, size=(640, 480))
 
 	time.sleep(0.25)
 	prevFrame = None
@@ -23,13 +29,11 @@ def main():
 	clientsocket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 	clientsocket.connect(('10.0.1.16',8089))
 
-	while(True):
-		#Capture frames
-		ret, frame = cap.read()
-		
+	for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+		image = frame.array
 		# resize the frame, convert it to grayscale, and blur it
-		frame = imutils.resize(frame, width=500)
-		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		frame_im = imutils.resize(image, width=500)
+		gray = cv2.cvtColor(frame_im, cv2.COLOR_BGR2GRAY)
 		gray = cv2.GaussianBlur(gray, (15, 15), 0)
 		count = count+1
 		if prevFrame != None:
@@ -46,7 +50,7 @@ def main():
 			#cv2.imshow("Threshold", thresh)
 
 
-			(cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+			(_,cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
 			
 			motion = "false"
 			
@@ -55,16 +59,19 @@ def main():
 				if cv2.contourArea(c) < 1000:
 					continue
 				(x, y, w, h) = cv2.boundingRect(c)
-				cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+				cv2.rectangle(frame_im, (x, y), (x + w, y + h), (0, 255, 0), 2)
 				motion = "_true"
 			#Send to server
-			data = pickle.dumps(frame)
-			clientsocket.sendall(motion+struct.pack("i", len(data))+data)
+			data = pickle.dumps(frame_im)
+			clientsocket.sendall(struct.pack("i", len(data))+data)
 			#cv2.imshow("Frame_cli", frame)
 			print motion
 
 		else:
 			prevFrame = gray
+
+		rawCapture.truncate()
+		rawCapture.seek(0)
 
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			break

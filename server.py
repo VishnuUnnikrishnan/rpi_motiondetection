@@ -11,7 +11,7 @@ import pickle
 import numpy as np
 import struct
 
-HOST=''
+HOST='10.0.1.16'
 PORT=8089
 
 s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -28,7 +28,6 @@ conn,addr=s.accept()
 data = ""
 payload_size = struct.calcsize("i") 
 while True:
-    print str(conn.recv(5))
 
     while len(data) < payload_size:
         data += conn.recv(4096)
